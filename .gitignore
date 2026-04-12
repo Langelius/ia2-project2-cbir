@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+references/
+
+# Outputs / cache
+*.npy
+*.pkl
+*.h5
+*.joblib
+outputs/
+results/
