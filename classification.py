@@ -12,6 +12,8 @@ from sklearn.metrics import (accuracy_score, precision_score,
 from sklearn.tree import DecisionTreeClassifier as DTC
 from sklearn.ensemble import RandomForestClassifier as RFC
 from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
+from sklearn.pipeline import Pipeline
 
 DOSSIER_SIGNATURES = 'signatures'
 DOSSIER_MODELES = 'models'
@@ -22,6 +24,14 @@ MODELES = [
     ('Decision Tree',  DTC()),
     ('Random Forest',  RFC()),
     ('SVM',            SVC()),
+]
+
+# Chaque scaler est combiné avec chaque modèle via un Pipeline
+SCALERS = [
+    ('Aucune',     None),
+    ('Standard',   StandardScaler()),
+    ('MinMax',     MinMaxScaler()),
+    ('Normalizer', Normalizer()),
 ]
 
 METRIQUES = [
@@ -36,55 +46,75 @@ def charger_signatures(nom_descripteur):
     chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
     tableau = np.load(chemin)
     X = tableau[:, :-1].astype('float')
+    # Nettoyage des valeurs invalides produites par bio_taxo (division par zéro dans le log)
+    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
     y = tableau[:, -1].astype('int')
     return X, y
 
 
+def construire_pipeline(nom_scaler, scaler, nom_modele, modele):
+    """Construit un Pipeline sklearn combinant scaler et modèle."""
+    nom = f'{nom_scaler} + {nom_modele}'
+    if scaler is None:
+        pipeline = Pipeline([('modele', modele)])
+    else:
+        pipeline = Pipeline([('scaler', scaler), ('modele', modele)])
+    return nom, pipeline
+
+
 def evaluer_modeles(X_entrainement, X_test, y_entrainement, y_test):
     resultats = []
-    modeles_entraines = {}
+    pipelines_entraines = {}
 
-    for nom_modele, modele in MODELES:
-        modele.fit(X_entrainement, y_entrainement)
-        predictions = modele.predict(X_test)
-        modeles_entraines[nom_modele] = (modele, predictions)
+    for nom_scaler, scaler in SCALERS:
+        for nom_modele, modele in MODELES:
+            nom_pipeline, pipeline = construire_pipeline(nom_scaler, scaler, nom_modele, modele)
 
-        for nom_metrique, fn_metrique in METRIQUES:
-            if nom_metrique == 'Accuracy':
-                score = fn_metrique(y_test, predictions)
-            else:
-                score = fn_metrique(y_test, predictions, average='weighted', zero_division=0)
+            pipeline.fit(X_entrainement, y_entrainement)
+            predictions = pipeline.predict(X_test)
+            pipelines_entraines[nom_pipeline] = (pipeline, predictions)
 
-            resultats.append({
-                'Modèle':   nom_modele,
-                'Métrique': nom_metrique,
-                'Score':    round(score, 4),
-            })
+            for nom_metrique, fn_metrique in METRIQUES:
+                if nom_metrique == 'Accuracy':
+                    score = fn_metrique(y_test, predictions)
+                else:
+                    score = fn_metrique(y_test, predictions, average='weighted', zero_division=0)
 
-    return pd.DataFrame(resultats), modeles_entraines
+                resultats.append({
+                    'Normalisation': nom_scaler,
+                    'Modèle':        nom_modele,
+                    'Métrique':      nom_metrique,
+                    'Score':         round(score, 4),
+                })
+
+    return pd.DataFrame(resultats), pipelines_entraines
 
 
-def afficher_matrices_confusion(modeles_entraines, y_test, dict_classes):
+def afficher_matrices_confusion(pipelines_entraines, y_test, dict_classes):
     noms_classes = [nom for nom, _ in sorted(dict_classes.items(), key=lambda x: x[1])]
-    for nom_modele, (_, predictions) in modeles_entraines.items():
+    for nom_pipeline, (_, predictions) in pipelines_entraines.items():
         matrice = confusion_matrix(y_test, predictions)
         df_matrice = pd.DataFrame(matrice, index=noms_classes, columns=noms_classes)
-        print(f'\nMatrice de confusion — {nom_modele}:')
+        print(f'\nMatrice de confusion — {nom_pipeline}:')
         print(df_matrice)
 
 
-def sauvegarder_meilleur_modele(df_resultats, modeles_entraines, nom_descripteur):
+def sauvegarder_meilleur_modele(df_resultats, pipelines_entraines, nom_descripteur):
     os.makedirs(DOSSIER_MODELES, exist_ok=True)
 
-    # Sélection du meilleur modèle selon l'accuracy
+    # Sélection du meilleur pipeline selon l'accuracy
     df_accuracy = df_resultats[df_resultats['Métrique'] == 'Accuracy']
-    meilleur_nom = df_accuracy.loc[df_accuracy['Score'].idxmax(), 'Modèle']
-    meilleur_modele, _ = modeles_entraines[meilleur_nom]
+    idx_meilleur = df_accuracy['Score'].idxmax()
+    meilleure_norm = df_accuracy.loc[idx_meilleur, 'Normalisation']
+    meilleur_modele_nom = df_accuracy.loc[idx_meilleur, 'Modèle']
+    nom_pipeline = f'{meilleure_norm} + {meilleur_modele_nom}'
+
+    meilleur_pipeline, _ = pipelines_entraines[nom_pipeline]
 
     chemin_modele = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
-    joblib.dump(meilleur_modele, chemin_modele)
-    print(f'\nMeilleur modèle : {meilleur_nom} (sauvegardé dans {chemin_modele})')
-    return meilleur_nom, chemin_modele
+    joblib.dump(meilleur_pipeline, chemin_modele)
+    print(f'\nMeilleur pipeline : {nom_pipeline} (sauvegardé dans {chemin_modele})')
+    return nom_pipeline, chemin_modele
 
 
 def entrainer(nom_descripteur):
@@ -97,19 +127,19 @@ def entrainer(nom_descripteur):
         X, y, test_size=0.3, random_state=42
     )
 
-    df_resultats, modeles_entraines = evaluer_modeles(
+    df_resultats, pipelines_entraines = evaluer_modeles(
         X_entrainement, X_test, y_entrainement, y_test
     )
-    print(df_resultats.to_string(index=False))
+    print(df_resultats.pivot_table(
+        index=['Normalisation', 'Modèle'], columns='Métrique', values='Score'
+    ).to_string())
 
     dict_classes = np.load(
         os.path.join(DOSSIER_SIGNATURES, 'class_mapping.npy'), allow_pickle=True
     ).item()
-    afficher_matrices_confusion(modeles_entraines, y_test, dict_classes)
+    afficher_matrices_confusion(pipelines_entraines, y_test, dict_classes)
 
-    meilleur_nom, chemin_modele = sauvegarder_meilleur_modele(
-        df_resultats, modeles_entraines, nom_descripteur
-    )
+    sauvegarder_meilleur_modele(df_resultats, pipelines_entraines, nom_descripteur)
     return df_resultats
 
 
@@ -131,7 +161,9 @@ def main():
         print(' Récapitulatif global')
         print(f'{"="*60}')
         print(df_global.pivot_table(
-            index=['Descripteur', 'Modèle'], columns='Métrique', values='Score'
+            index=['Descripteur', 'Normalisation', 'Modèle'],
+            columns='Métrique',
+            values='Score'
         ).to_string())
 
 
