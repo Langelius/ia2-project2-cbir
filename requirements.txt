@@ -6,3 +6,6 @@ mahotas
 bitdesc
 opencv-python
 matplotlib
+scipy
+streamlit
+joblib

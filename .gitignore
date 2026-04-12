@@ -22,5 +22,7 @@ references/
 *.pkl
 *.h5
 *.joblib
+signatures/
+models/
 outputs/
 results/
