@@ -51,7 +51,7 @@ Extraction de caractéristiques visuelles sur les 3 canaux RGB indépendamment :
 - Sauvegarde du mapping `classe → indice` dans `class_mapping.npy`
 
 #### 3. Classification (`classification.py`)
-Trois modèles comparés sur chacun des 4 descripteurs :
+Trois modèles combinés avec 4 normalisations via `sklearn.Pipeline` :
 
 | Modèle | Alias |
 |--------|-------|
@@ -59,10 +59,30 @@ Trois modèles comparés sur chacun des 4 descripteurs :
 | Random Forest | RFC |
 | SVM | SVC |
 
+| Normalisation | Rôle |
+|--------------|------|
+| Aucune | Données brutes |
+| StandardScaler | Centrage et réduction (moyenne=0, écart-type=1) |
+| MinMaxScaler | Mise à l'échelle entre 0 et 1 |
+| Normalizer | Normalisation L2 par ligne |
+
 Métriques évaluées : Accuracy, Précision, Rappel, F1-Score (average weighted).  
-Le meilleur modèle (selon l'accuracy) est sauvegardé automatiquement en `.joblib` dans `models/`.
+Le meilleur pipeline (normalisation + modèle selon l'accuracy) est sauvegardé en `.joblib` dans `models/`.
+
+**Choix technique :** utilisation de `Pipeline` sklearn pour encapsuler le scaler et le modèle dans un seul objet — le scaler est ainsi appliqué automatiquement à l'inférence dans `cbir.py` sans modification.
 
 **Choix technique :** séparation train/test 70/30 avec `random_state=42` pour la reproductibilité.
+
+**Meilleurs pipelines obtenus :**
+
+| Descripteur | Pipeline | Accuracy |
+|-------------|---------|----------|
+| glcm | Aucune + Random Forest | 14.72% |
+| haralick | MinMax + Random Forest | 24.17% |
+| bitdesc | Standard + Random Forest | 14.17% |
+| concat | MinMax + Random Forest | 20.56% |
+
+> Les scores reflètent la difficulté de distinguer 20 espèces d'animaux avec des descripteurs de texture seuls (GLCM, Haralick, BiT), sur un dataset de 60 images par classe.
 
 ---
 
