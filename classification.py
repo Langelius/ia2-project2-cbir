@@ -18,7 +18,8 @@ from sklearn.pipeline import Pipeline
 DOSSIER_SIGNATURES = 'signatures'
 DOSSIER_MODELES = 'models'
 
-DESCRIPTEURS_DISPO = ['glcm', 'haralick', 'bitdesc', 'concat']
+DESCRIPTEURS_DISPO = ['glcm', 'haralick', 'bitdesc', 'concat',
+                      'hist', 'glcm_hist', 'haralick_hist', 'bitdesc_hist', 'concat_hist']
 
 MODELES = [
     ('Decision Tree',  DTC()),

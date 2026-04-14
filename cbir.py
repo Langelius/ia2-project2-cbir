@@ -2,17 +2,24 @@ import os
 import numpy as np
 import joblib
 
-from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB
+from descripteurs import (glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB,
+                          histogramme_RGB, glcm_hist_RGB, haralick_hist_RGB,
+                          bitdesc_hist_RGB, concat_hist_RGB)
 
 DOSSIER_SIGNATURES = 'signatures'
 DOSSIER_MODELES = 'models'
 DOSSIER_DATASET = 'dataset'
 
 FONCTIONS_DESCRIPTEURS = {
-    'glcm':     glcm_RGB,
-    'haralick': haralick_feat_RGB,
-    'bitdesc':  bitdesc_feat_RGB,
-    'concat':   concat_RGB,
+    'glcm':          glcm_RGB,
+    'haralick':      haralick_feat_RGB,
+    'bitdesc':       bitdesc_feat_RGB,
+    'concat':        concat_RGB,
+    'hist':          histogramme_RGB,
+    'glcm_hist':     glcm_hist_RGB,
+    'haralick_hist': haralick_hist_RGB,
+    'bitdesc_hist':  bitdesc_hist_RGB,
+    'concat_hist':   concat_hist_RGB,
 }
 
 
