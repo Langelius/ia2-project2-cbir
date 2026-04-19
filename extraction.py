@@ -24,10 +24,10 @@ def traiter_image(args):
     try:
         image_rgb = charger_image(chemin)
         return chemin, {
-            'glcm':     glcm_RGB(image_rgb)     + [etiquette],
+            'glcm':     glcm_RGB(image_rgb)          + [etiquette],
             'haralick': haralick_feat_RGB(image_rgb) + [etiquette],
             'bitdesc':  bitdesc_feat_RGB(image_rgb)  + [etiquette],
-            'concat':   concat_RGB(image_rgb)    + [etiquette],
+            'concat':   concat_RGB(image_rgb)        + [etiquette],
         }
     except Exception as e:
         return chemin, None, str(e)
@@ -52,11 +52,12 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
     os.makedirs(dossier_signatures, exist_ok=True)
 
     liste_args = collecter_images(dossier_dataset, dict_classes)
-    print(f'{len(liste_args)} images à traiter sur {os.cpu_count() - 1} cœurs...')
+    nb_workers = (os.cpu_count() or 4) - 1
+    print(f'{len(liste_args)} images à traiter sur {nb_workers} cœurs...')
 
     donnees = {'glcm': [], 'haralick': [], 'bitdesc': [], 'concat': []}
 
-    with ProcessPoolExecutor(max_workers=os.cpu_count() - 1) as executor:
+    with ProcessPoolExecutor(max_workers=nb_workers) as executor:
         futures = {executor.submit(traiter_image, args): args[0] for args in liste_args}
         for future in as_completed(futures):
             resultat = future.result()
