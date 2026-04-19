@@ -3,7 +3,6 @@ warnings.filterwarnings("ignore")
 
 import os
 import numpy as np
-import pandas as pd
 
 from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
@@ -55,9 +54,7 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
     for nom_desc, lignes in donnees.items():
         tableau = np.array(lignes)
         chemin_npy = os.path.join(dossier_signatures, f'signatures_{nom_desc}.npy')
-        chemin_csv = os.path.join(dossier_signatures, f'signatures_{nom_desc}.csv')
         np.save(chemin_npy, tableau)
-        pd.DataFrame(tableau).to_csv(chemin_csv, index=False)
         print(f'Sauvegardé : {chemin_npy}  forme={tableau.shape}')
 
     chemin_mapping = os.path.join(dossier_signatures, 'class_mapping.npy')
