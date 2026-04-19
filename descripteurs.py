@@ -8,44 +8,48 @@ import numpy as np
 PROPRIETES_GLCM = ['contrast', 'homogeneity', 'energy', 'dissimilarity', 'correlation', 'ASM']
 
 
-def glcm_RGB(chemin):
-    """Extrait 18 caractéristiques GLCM (6 par canal RGB)."""
+def charger_image(chemin):
+    """Charge une image depuis le disque et la convertit en RGB."""
     image = cv2.imread(chemin)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+
+def glcm_RGB(image_rgb):
+    """Extrait 18 caractéristiques GLCM (6 par canal RGB)."""
     caracteristiques = []
     for i in range(3):
-        canal = image[:, :, i]
+        canal = image_rgb[:, :, i]
         matrice_cooccurrence = graycomatrix(canal, [1], [np.pi / 2], symmetric=False, normed=False)
         caracteristiques.extend([float(graycoprops(matrice_cooccurrence, p)[0, 0]) for p in PROPRIETES_GLCM])
     return caracteristiques  # 18 valeurs
 
 
-def haralick_feat_RGB(chemin):
+def haralick_feat_RGB(image_rgb):
     """Extrait 39 caractéristiques Haralick (13 par canal RGB)."""
-    image = cv2.imread(chemin)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     caracteristiques = []
     for i in range(3):
-        canal = image[:, :, i]
+        canal = image_rgb[:, :, i]
         caracteristiques.extend([float(x) for x in haralick(canal).mean(0).tolist()])
     return caracteristiques  # 39 valeurs
 
 
-def bitdesc_feat_RGB(chemin):
+def bitdesc_feat_RGB(image_rgb):
     """Extrait 42 caractéristiques BiT (14 par canal RGB)."""
-    image = cv2.imread(chemin)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     caracteristiques = []
     for i in range(3):
-        canal = image[:, :, i]
-        caracteristiques.extend([float(x) for x in bio_taxo(canal)])
+        canal = image_rgb[:, :, i]
+        valeurs = np.nan_to_num(
+            np.array([float(x) for x in bio_taxo(canal)]),
+            nan=0.0, posinf=0.0, neginf=0.0
+        )
+        caracteristiques.extend(valeurs.tolist())
     return caracteristiques  # 42 valeurs
 
 
-def concat_RGB(chemin):
+def concat_RGB(image_rgb):
     """Concatène GLCM + Haralick + BiT → 99 caractéristiques."""
     caracteristiques = []
-    caracteristiques.extend(glcm_RGB(chemin))
-    caracteristiques.extend(haralick_feat_RGB(chemin))
-    caracteristiques.extend(bitdesc_feat_RGB(chemin))
+    caracteristiques.extend(glcm_RGB(image_rgb))
+    caracteristiques.extend(haralick_feat_RGB(image_rgb))
+    caracteristiques.extend(bitdesc_feat_RGB(image_rgb))
     return caracteristiques  # 99 valeurs

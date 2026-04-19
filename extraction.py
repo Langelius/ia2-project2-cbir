@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB
+from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
 DOSSIER_DATASET = 'dataset'
 DOSSIER_SIGNATURES = 'signatures'
@@ -42,9 +42,10 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
             etiquette = dict_classes[nom_classe]
 
             try:
+                image_rgb = charger_image(chemin)
                 for nom_desc, fn in DESCRIPTEURS.items():
                     ligne = []
-                    ligne.extend(fn(chemin))
+                    ligne.extend(fn(image_rgb))
                     ligne.append(etiquette)
                     donnees[nom_desc].append(ligne)
                 print(f'[OK] {chemin}')
@@ -53,8 +54,6 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
 
     for nom_desc, lignes in donnees.items():
         tableau = np.array(lignes)
-        # Nettoyage des valeurs invalides produites par bio_taxo (division par zéro dans le log)
-        tableau = np.nan_to_num(tableau, nan=0.0, posinf=0.0, neginf=0.0)
         chemin_npy = os.path.join(dossier_signatures, f'signatures_{nom_desc}.npy')
         chemin_csv = os.path.join(dossier_signatures, f'signatures_{nom_desc}.csv')
         np.save(chemin_npy, tableau)
