@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB
+from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
 DOSSIER_DATASET = 'dataset'
 DOSSIER_SIGNATURES = 'signatures'
@@ -42,9 +42,10 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
             etiquette = dict_classes[nom_classe]
 
             try:
+                image_rgb = charger_image(chemin)
                 for nom_desc, fn in DESCRIPTEURS.items():
                     ligne = []
-                    ligne.extend(fn(chemin))
+                    ligne.extend(fn(image_rgb))
                     ligne.append(etiquette)
                     donnees[nom_desc].append(ligne)
                 print(f'[OK] {chemin}')

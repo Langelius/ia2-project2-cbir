@@ -2,7 +2,7 @@ import os
 import numpy as np
 import joblib
 
-from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB
+from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
 DOSSIER_SIGNATURES = 'signatures'
 DOSSIER_MODELES = 'models'
@@ -112,7 +112,8 @@ def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
 
     # Extraction des caractéristiques de l'image requête
     fonction_descripteur = FONCTIONS_DESCRIPTEURS[nom_descripteur]
-    caracteristiques_requete = np.array(fonction_descripteur(chemin_requete))
+    image_rgb = charger_image(chemin_requete)
+    caracteristiques_requete = np.array(fonction_descripteur(image_rgb))
 
     # Prédiction de la classe
     modele = charger_modele(nom_descripteur)
