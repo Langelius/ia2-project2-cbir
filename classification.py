@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import joblib
 
+from sklearn.base import clone
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (accuracy_score, precision_score,
                              recall_score, f1_score, confusion_matrix)
@@ -21,12 +22,11 @@ DOSSIER_MODELES = 'models'
 DESCRIPTEURS_DISPO = ['glcm', 'haralick', 'bitdesc', 'concat']
 
 MODELES = [
-    ('Decision Tree',  DTC()),
-    ('Random Forest',  RFC()),
-    ('SVM',            SVC()),
+    ('Decision Tree', DTC(random_state=42)),
+    ('Random Forest', RFC(random_state=42)),
+    ('SVM',           SVC(random_state=42)),
 ]
 
-# Chaque scaler est combiné avec chaque modèle via un Pipeline
 SCALERS = [
     ('Aucune',     None),
     ('Standard',   StandardScaler()),
@@ -46,19 +46,16 @@ def charger_signatures(nom_descripteur):
     chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
     tableau = np.load(chemin)
     X = tableau[:, :-1].astype('float')
-    # Nettoyage des valeurs invalides produites par bio_taxo (division par zéro dans le log)
-    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
     y = tableau[:, -1].astype('int')
     return X, y
 
 
 def construire_pipeline(nom_scaler, scaler, nom_modele, modele):
-    """Construit un Pipeline sklearn combinant scaler et modèle."""
     nom = f'{nom_scaler} + {nom_modele}'
     if scaler is None:
-        pipeline = Pipeline([('modele', modele)])
+        pipeline = Pipeline([('modele', clone(modele))])
     else:
-        pipeline = Pipeline([('scaler', scaler), ('modele', modele)])
+        pipeline = Pipeline([('scaler', clone(scaler)), ('modele', clone(modele))])
     return nom, pipeline
 
 
@@ -102,7 +99,6 @@ def afficher_matrices_confusion(pipelines_entraines, y_test, dict_classes):
 def sauvegarder_meilleur_modele(df_resultats, pipelines_entraines, nom_descripteur):
     os.makedirs(DOSSIER_MODELES, exist_ok=True)
 
-    # Sélection du meilleur pipeline selon l'accuracy
     df_accuracy = df_resultats[df_resultats['Métrique'] == 'Accuracy']
     idx_meilleur = df_accuracy['Score'].idxmax()
     meilleure_norm = df_accuracy.loc[idx_meilleur, 'Normalisation']
