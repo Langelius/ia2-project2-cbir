@@ -20,25 +20,26 @@ FONCTIONS_DESCRIPTEURS = {
 #  Mesures de distance
 # ─────────────────────────────────────────────
 
-def distance_euclidienne(vecteur_a, vecteur_b):
-    return np.sqrt(np.sum((vecteur_a - vecteur_b) ** 2))
+def distance_euclidienne(requete, signatures):
+    """requete: (d,)  signatures: (n, d)  →  (n,)"""
+    return np.sqrt(np.sum((signatures - requete) ** 2, axis=1))
 
 
-def distance_canberra(vecteur_a, vecteur_b):
-    numerateur = np.abs(vecteur_a - vecteur_b)
-    denominateur = np.abs(vecteur_a) + np.abs(vecteur_b)
-    # Évite la division par zéro quand les deux valeurs sont nulles
-    masque_non_nul = denominateur != 0
-    return np.sum(numerateur[masque_non_nul] / denominateur[masque_non_nul])
+def distance_canberra(requete, signatures):
+    """requete: (d,)  signatures: (n, d)  →  (n,)"""
+    numerateur = np.abs(signatures - requete)
+    denominateur = np.abs(signatures) + np.abs(requete)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        ratio = np.where(denominateur != 0, numerateur / denominateur, 0.0)
+    return np.sum(ratio, axis=1)
 
 
-def distance_cosinus(vecteur_a, vecteur_b):
-    norme_a = np.linalg.norm(vecteur_a)
-    norme_b = np.linalg.norm(vecteur_b)
-    if norme_a == 0 or norme_b == 0:
-        return 1.0  # distance maximale si un vecteur est nul
-    similarite = np.dot(vecteur_a, vecteur_b) / (norme_a * norme_b)
-    return 1.0 - similarite  # conversion similarité → distance
+def distance_cosinus(requete, signatures):
+    """requete: (d,)  signatures: (n, d)  →  (n,)"""
+    normes = np.linalg.norm(signatures, axis=1) * np.linalg.norm(requete)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        similarites = np.where(normes != 0, signatures @ requete / normes, 0.0)
+    return 1.0 - similarites
 
 
 MESURES_DISTANCE = {
@@ -135,9 +136,9 @@ def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
 
     chemins_classe = [chemin for chemin, appartient_classe in zip(chemins_images, masque_classe) if appartient_classe]
 
-    # Calcul des distances
+    # Calcul des distances (vectorisé sur toute la classe)
     fonction_distance = MESURES_DISTANCE[nom_distance]
-    distances = [fonction_distance(caracteristiques_requete, signature) for signature in signatures_classe]
+    distances = fonction_distance(caracteristiques_requete, signatures_classe)
 
     # Tri par distance croissante
     indices_tries = np.argsort(distances)
