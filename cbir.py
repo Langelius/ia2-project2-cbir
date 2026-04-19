@@ -53,39 +53,52 @@ MESURES_DISTANCE = {
 #  Chargement des ressources
 # ─────────────────────────────────────────────
 
+_cache = {}
+
+
 def charger_signatures(nom_descripteur):
-    chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
-    tableau = np.load(chemin)
-    caracteristiques = tableau[:, :-1].astype('float')
-    # Nettoyage des valeurs invalides produites par bio_taxo (division par zéro dans le log)
-    caracteristiques = np.nan_to_num(caracteristiques, nan=0.0, posinf=0.0, neginf=0.0)
-    etiquettes = tableau[:, -1].astype('int')
-    return caracteristiques, etiquettes
+    key = f'signatures_{nom_descripteur}'
+    if key not in _cache:
+        chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
+        tableau = np.load(chemin)
+        caracteristiques = tableau[:, :-1].astype('float')
+        caracteristiques = np.nan_to_num(caracteristiques, nan=0.0, posinf=0.0, neginf=0.0)
+        etiquettes = tableau[:, -1].astype('int')
+        _cache[key] = (caracteristiques, etiquettes)
+    return _cache[key]
 
 
 def charger_chemins_images(dossier_dataset, dict_classes):
-    chemins = []
-    etiquettes = []
-    for racine, _, fichiers in os.walk(dossier_dataset):
-        for fichier in sorted(fichiers):
-            if not fichier.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
-                continue
-            nom_classe = os.path.basename(racine)
-            if nom_classe not in dict_classes:
-                continue
-            chemins.append(os.path.join(racine, fichier))
-            etiquettes.append(dict_classes[nom_classe])
-    return chemins, np.array(etiquettes)
+    key = f'chemins_{dossier_dataset}'
+    if key not in _cache:
+        chemins = []
+        etiquettes = []
+        for racine, _, fichiers in os.walk(dossier_dataset):
+            for fichier in sorted(fichiers):
+                if not fichier.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+                    continue
+                nom_classe = os.path.basename(racine)
+                if nom_classe not in dict_classes:
+                    continue
+                chemins.append(os.path.join(racine, fichier))
+                etiquettes.append(dict_classes[nom_classe])
+        _cache[key] = (chemins, np.array(etiquettes))
+    return _cache[key]
 
 
 def charger_modele(nom_descripteur):
-    chemin = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
-    return joblib.load(chemin)
+    key = f'modele_{nom_descripteur}'
+    if key not in _cache:
+        chemin = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
+        _cache[key] = joblib.load(chemin)
+    return _cache[key]
 
 
 def charger_dict_classes():
-    chemin = os.path.join(DOSSIER_SIGNATURES, 'class_mapping.npy')
-    return np.load(chemin, allow_pickle=True).item()
+    if 'dict_classes' not in _cache:
+        chemin = os.path.join(DOSSIER_SIGNATURES, 'class_mapping.npy')
+        _cache['dict_classes'] = np.load(chemin, allow_pickle=True).item()
+    return _cache['dict_classes']
 
 
 # ─────────────────────────────────────────────
