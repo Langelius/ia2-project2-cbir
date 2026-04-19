@@ -7,9 +7,8 @@ import pandas as pd
 import joblib
 
 from sklearn.base import clone
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import (accuracy_score, precision_score,
-                             recall_score, f1_score, confusion_matrix)
+from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.metrics import confusion_matrix
 from sklearn.tree import DecisionTreeClassifier as DTC
 from sklearn.ensemble import RandomForestClassifier as RFC
 from sklearn.svm import SVC
@@ -18,6 +17,7 @@ from sklearn.pipeline import Pipeline
 
 DOSSIER_SIGNATURES = 'signatures'
 DOSSIER_MODELES = 'models'
+N_FOLDS = 5
 
 DESCRIPTEURS_DISPO = ['glcm', 'haralick', 'bitdesc', 'concat']
 
@@ -32,13 +32,6 @@ SCALERS = [
     ('Standard',   StandardScaler()),
     ('MinMax',     MinMaxScaler()),
     ('Normalizer', Normalizer()),
-]
-
-METRIQUES = [
-    ('Accuracy',  accuracy_score),
-    ('Précision', precision_score),
-    ('Rappel',    recall_score),
-    ('F1-Score',  f1_score),
 ]
 
 
@@ -59,56 +52,73 @@ def construire_pipeline(nom_scaler, scaler, nom_modele, modele):
     return nom, pipeline
 
 
-def evaluer_modeles(X_entrainement, X_test, y_entrainement, y_test):
+def evaluer_modeles(X, y):
     resultats = []
-    pipelines_entraines = {}
+    cv = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
+    scoring = {
+        'accuracy':  'accuracy',
+        'precision': 'precision_weighted',
+        'recall':    'recall_weighted',
+        'f1':        'f1_weighted',
+    }
 
     for nom_scaler, scaler in SCALERS:
         for nom_modele, modele in MODELES:
             nom_pipeline, pipeline = construire_pipeline(nom_scaler, scaler, nom_modele, modele)
 
-            pipeline.fit(X_entrainement, y_entrainement)
-            predictions = pipeline.predict(X_test)
-            pipelines_entraines[nom_pipeline] = (pipeline, predictions)
+            scores = cross_validate(pipeline, X, y, cv=cv, scoring=scoring)
 
-            for nom_metrique, fn_metrique in METRIQUES:
-                if nom_metrique == 'Accuracy':
-                    score = fn_metrique(y_test, predictions)
-                else:
-                    score = fn_metrique(y_test, predictions, average='weighted', zero_division=0)
+            resultats.append({
+                'Normalisation': nom_scaler,
+                'Modèle':        nom_modele,
+                'Accuracy':      round(scores['test_accuracy'].mean(), 4),
+                'Précision':     round(scores['test_precision'].mean(), 4),
+                'Rappel':        round(scores['test_recall'].mean(), 4),
+                'F1-Score':      round(scores['test_f1'].mean(), 4),
+            })
 
-                resultats.append({
-                    'Normalisation': nom_scaler,
-                    'Modèle':        nom_modele,
-                    'Métrique':      nom_metrique,
-                    'Score':         round(score, 4),
-                })
-
-    return pd.DataFrame(resultats), pipelines_entraines
+    return pd.DataFrame(resultats)
 
 
-def afficher_matrices_confusion(pipelines_entraines, y_test, dict_classes):
+def afficher_matrices_confusion(X, y, df_resultats, dict_classes):
     noms_classes = [nom for nom, _ in sorted(dict_classes.items(), key=lambda x: x[1])]
-    for nom_pipeline, (_, predictions) in pipelines_entraines.items():
-        matrice = confusion_matrix(y_test, predictions)
-        df_matrice = pd.DataFrame(matrice, index=noms_classes, columns=noms_classes)
+    cv = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
+
+    for _, ligne in df_resultats.iterrows():
+        nom_scaler = ligne['Normalisation']
+        nom_modele = ligne['Modèle']
+        scaler = dict(SCALERS)[nom_scaler]
+        modele = dict(MODELES)[nom_modele]
+        nom_pipeline, pipeline = construire_pipeline(nom_scaler, scaler, nom_modele, modele)
+
+        matrice_totale = np.zeros((len(noms_classes), len(noms_classes)), dtype=int)
+        for idx_train, idx_test in cv.split(X, y):
+            pipeline_fold = clone(pipeline)
+            pipeline_fold.fit(X[idx_train], y[idx_train])
+            predictions = pipeline_fold.predict(X[idx_test])
+            matrice_totale += confusion_matrix(y[idx_test], predictions, labels=list(range(len(noms_classes))))
+
+        df_matrice = pd.DataFrame(matrice_totale, index=noms_classes, columns=noms_classes)
         print(f'\nMatrice de confusion — {nom_pipeline}:')
         print(df_matrice)
 
 
-def sauvegarder_meilleur_modele(df_resultats, pipelines_entraines, nom_descripteur):
+def sauvegarder_meilleur_modele(X, y, df_resultats, nom_descripteur):
     os.makedirs(DOSSIER_MODELES, exist_ok=True)
 
-    df_accuracy = df_resultats[df_resultats['Métrique'] == 'Accuracy']
-    idx_meilleur = df_accuracy['Score'].idxmax()
-    meilleure_norm = df_accuracy.loc[idx_meilleur, 'Normalisation']
-    meilleur_modele_nom = df_accuracy.loc[idx_meilleur, 'Modèle']
-    nom_pipeline = f'{meilleure_norm} + {meilleur_modele_nom}'
+    idx_meilleur = df_resultats['Accuracy'].idxmax()
+    meilleure_norm   = df_resultats.loc[idx_meilleur, 'Normalisation']
+    meilleur_modele_nom = df_resultats.loc[idx_meilleur, 'Modèle']
 
-    meilleur_pipeline, _ = pipelines_entraines[nom_pipeline]
+    scaler = dict(SCALERS)[meilleure_norm]
+    modele = dict(MODELES)[meilleur_modele_nom]
+    nom_pipeline, pipeline = construire_pipeline(meilleure_norm, scaler, meilleur_modele_nom, modele)
+
+    # Réentraînement sur 100% des données
+    pipeline.fit(X, y)
 
     chemin_modele = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
-    joblib.dump(meilleur_pipeline, chemin_modele)
+    joblib.dump(pipeline, chemin_modele)
     print(f'\nMeilleur pipeline : {nom_pipeline} (sauvegardé dans {chemin_modele})')
     return nom_pipeline, chemin_modele
 
@@ -119,23 +129,16 @@ def entrainer(nom_descripteur):
     print(f'{"="*60}')
 
     X, y = charger_signatures(nom_descripteur)
-    X_entrainement, X_test, y_entrainement, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42
-    )
 
-    df_resultats, pipelines_entraines = evaluer_modeles(
-        X_entrainement, X_test, y_entrainement, y_test
-    )
-    print(df_resultats.pivot_table(
-        index=['Normalisation', 'Modèle'], columns='Métrique', values='Score'
-    ).to_string())
+    df_resultats = evaluer_modeles(X, y)
+    print(df_resultats.set_index(['Normalisation', 'Modèle']).to_string())
 
     dict_classes = np.load(
         os.path.join(DOSSIER_SIGNATURES, 'class_mapping.npy'), allow_pickle=True
     ).item()
-    afficher_matrices_confusion(pipelines_entraines, y_test, dict_classes)
+    afficher_matrices_confusion(X, y, df_resultats, dict_classes)
 
-    sauvegarder_meilleur_modele(df_resultats, pipelines_entraines, nom_descripteur)
+    sauvegarder_meilleur_modele(X, y, df_resultats, nom_descripteur)
     return df_resultats
 
 
@@ -156,11 +159,7 @@ def main():
         print(f'\n{"="*60}')
         print(' Récapitulatif global')
         print(f'{"="*60}')
-        print(df_global.pivot_table(
-            index=['Descripteur', 'Normalisation', 'Modèle'],
-            columns='Métrique',
-            values='Score'
-        ).to_string())
+        print(df_global.set_index(['Descripteur', 'Normalisation', 'Modèle']).to_string())
 
 
 if __name__ == '__main__':
