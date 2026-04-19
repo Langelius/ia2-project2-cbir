@@ -54,8 +54,6 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
 
     for nom_desc, lignes in donnees.items():
         tableau = np.array(lignes)
-        # Nettoyage des valeurs invalides produites par bio_taxo (division par zéro dans le log)
-        tableau = np.nan_to_num(tableau, nan=0.0, posinf=0.0, neginf=0.0)
         chemin_npy = os.path.join(dossier_signatures, f'signatures_{nom_desc}.npy')
         chemin_csv = os.path.join(dossier_signatures, f'signatures_{nom_desc}.csv')
         np.save(chemin_npy, tableau)

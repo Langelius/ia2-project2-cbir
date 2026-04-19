@@ -62,7 +62,6 @@ def charger_signatures(nom_descripteur):
         chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
         tableau = np.load(chemin)
         caracteristiques = tableau[:, :-1].astype('float')
-        caracteristiques = np.nan_to_num(caracteristiques, nan=0.0, posinf=0.0, neginf=0.0)
         etiquettes = tableau[:, -1].astype('int')
         _cache[key] = (caracteristiques, etiquettes)
     return _cache[key]

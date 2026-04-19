@@ -38,7 +38,11 @@ def bitdesc_feat_RGB(image_rgb):
     caracteristiques = []
     for i in range(3):
         canal = image_rgb[:, :, i]
-        caracteristiques.extend([float(x) for x in bio_taxo(canal)])
+        valeurs = np.nan_to_num(
+            np.array([float(x) for x in bio_taxo(canal)]),
+            nan=0.0, posinf=0.0, neginf=0.0
+        )
+        caracteristiques.extend(valeurs.tolist())
     return caracteristiques  # 42 valeurs
 
 
