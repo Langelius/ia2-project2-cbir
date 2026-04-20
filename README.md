@@ -19,8 +19,8 @@ Projet2/
 ├── signatures/           # Fichiers .npy générés par extraction.py (gitignore)
 ├── models/               # Modèles sauvegardés par classification.py (gitignore)
 ├── descripteurs.py       # Fonctions d'extraction de caractéristiques RGB
-├── extraction.py         # Extraction et sauvegarde des signatures du dataset
-├── classification.py     # Entraînement, évaluation et sauvegarde du meilleur modèle
+├── extraction.py         # Extraction parallèle et sauvegarde des signatures
+├── classification.py     # Entraînement par validation croisée et sauvegarde du meilleur modèle
 ├── cbir.py               # Moteur de recherche CBIR avec mesures de distance
 ├── app.py                # Interface web Streamlit
 └── requirements.txt      # Dépendances Python
@@ -33,7 +33,7 @@ Projet2/
 ### Partie 1 — Extraction et classification
 
 #### 1. Descripteurs (`descripteurs.py`)
-Extraction de caractéristiques visuelles sur les 3 canaux RGB indépendamment :
+Extraction de caractéristiques visuelles sur les 3 canaux RGB indépendamment. L'image est chargée **une seule fois** puis transmise à toutes les fonctions de descripteurs pour éviter les lectures disque redondantes.
 
 | Descripteur | Caractéristiques | Détail |
 |-------------|-----------------|--------|
@@ -44,10 +44,14 @@ Extraction de caractéristiques visuelles sur les 3 canaux RGB indépendamment :
 
 **Choix technique :** traitement canal par canal (RGB) plutôt qu'en niveaux de gris pour conserver l'information couleur, essentielle à la discrimination d'animaux.
 
+**Robustesse :** les valeurs NaN/inf produites par le descripteur BiT (division par zéro dans les indices de biodiversité) sont corrigées à la source dans `bitdesc_feat_RGB` via `np.nan_to_num`.
+
 #### 2. Extraction (`extraction.py`)
 - Parcours récursif du dataset
 - Construction automatique du dictionnaire de classes depuis les noms de dossiers (trié alphabétiquement pour garantir un mapping stable)
-- Sauvegarde de 4 fichiers `.npy` et `.csv` (un par descripteur) dans `signatures/`
+- **Traitement parallèle** sur tous les cœurs CPU disponibles (`ProcessPoolExecutor`) avec `executor.map` pour garantir l'ordre d'insertion
+- Sauvegarde de 4 fichiers `.npy` (un par descripteur) dans `signatures/`
+- Sauvegarde du fichier `chemins.npy` (liste ordonnée des chemins d'images) pour garantir la synchronisation avec les signatures dans `cbir.py`
 - Sauvegarde du mapping `classe → indice` dans `class_mapping.npy`
 
 #### 3. Classification (`classification.py`)
@@ -66,23 +70,15 @@ Trois modèles combinés avec 4 normalisations via `sklearn.Pipeline` :
 | MinMaxScaler | Mise à l'échelle entre 0 et 1 |
 | Normalizer | Normalisation L2 par ligne |
 
-Métriques évaluées : Accuracy, Précision, Rappel, F1-Score (average weighted).  
-Le meilleur pipeline (normalisation + modèle selon l'accuracy) est sauvegardé en `.joblib` dans `models/`.
+Métriques évaluées : Accuracy, Précision, Rappel, F1-Score (average weighted).
 
-**Choix technique :** utilisation de `Pipeline` sklearn pour encapsuler le scaler et le modèle dans un seul objet — le scaler est ainsi appliqué automatiquement à l'inférence dans `cbir.py` sans modification.
+**Évaluation par validation croisée 5-fold (`StratifiedKFold`) :** les métriques affichées sont des moyennes sur 5 partitions, ce qui rend la sélection de modèle plus robuste qu'un seul split 70/30. La stratification garantit une représentation équilibrée de chaque classe dans chaque fold.
 
-**Choix technique :** séparation train/test 70/30 avec `random_state=42` pour la reproductibilité.
+**Réentraînement sur 100% des données :** une fois le meilleur pipeline sélectionné par CV, il est réentraîné sur l'ensemble du dataset avant d'être sauvegardé en `.joblib` dans `models/`.
 
-**Meilleurs pipelines obtenus :**
+**Choix technique :** utilisation de `Pipeline` sklearn avec `clone()` pour que chaque combinaison reçoive une instance fraîche du modèle et du scaler — évite le partage d'état entre pipelines. Le scaler est ainsi appliqué automatiquement à l'inférence dans `cbir.py` sans modification.
 
-| Descripteur | Pipeline | Accuracy |
-|-------------|---------|----------|
-| glcm | Aucune + Random Forest | 14.72% |
-| haralick | MinMax + Random Forest | 24.17% |
-| bitdesc | Standard + Random Forest | 14.17% |
-| concat | MinMax + Random Forest | 20.56% |
-
-> Les scores reflètent la difficulté de distinguer 20 espèces d'animaux avec des descripteurs de texture seuls (GLCM, Haralick, BiT), sur un dataset de 60 images par classe.
+**Reproductibilité :** `random_state=42` sur tous les modèles et sur le `StratifiedKFold`.
 
 ---
 
@@ -96,14 +92,21 @@ Le meilleur pipeline (normalisation + modèle selon l'accuracy) est sauvegardé 
 | Canberra | Σ \|aᵢ − bᵢ\| / (\|aᵢ\| + \|bᵢ\|) |
 | Cosinus | 1 − (a·b) / (‖a‖ × ‖b‖) |
 
+Les trois fonctions de distance sont **vectorisées** (opérations NumPy sur matrices) — aucune boucle Python sur les images.
+
 #### Pipeline de recherche
 1. Extraction des caractéristiques de l'image requête
-2. Prédiction de sa classe avec le meilleur modèle sauvegardé
+2. Prédiction de sa classe avec le meilleur modèle sauvegardé (le scaler du pipeline est appliqué automatiquement)
 3. Filtrage du dataset — seules les images de la classe prédite sont comparées
-4. Calcul des distances entre la requête et les signatures filtrées
-5. Retour des N images les plus proches (distance croissante)
+4. Application du scaler du pipeline aux features requête et aux signatures filtrées pour des distances cohérentes avec l'espace de classification
+5. Calcul vectorisé des distances
+6. Retour des N images les plus proches (distance croissante), N plafonné à la taille de la classe
 
 **Choix technique :** le filtrage par classe réduit la recherche de 1200 à ~60 images, améliorant la précision et la vitesse.
+
+**Performance :** les modèles, signatures et chemins sont mis en cache en mémoire (`_cache`) — les requêtes successives n'impliquent aucune lecture disque.
+
+**Synchronisation signatures/chemins :** `chemins.npy` est généré par `extraction.py` dans le même ordre que les signatures, garantissant la correspondance entre chaque ligne de signature et son chemin d'image.
 
 ---
 
@@ -139,9 +142,10 @@ Génère les fichiers dans `signatures/` :
 - `signatures_haralick.npy`
 - `signatures_bitdesc.npy`
 - `signatures_concat.npy`
+- `chemins.npy`
 - `class_mapping.npy`
 
-> ⚠️ Cette étape peut prendre plusieurs minutes selon la machine (1200 images × 4 descripteurs).
+> ⚠️ Cette étape utilise tous les cœurs CPU disponibles. Le temps d'extraction est réduit proportionnellement au nombre de cœurs.
 
 ### Étape 2 — Entraînement et sélection du meilleur modèle
 
@@ -149,7 +153,7 @@ Génère les fichiers dans `signatures/` :
 python classification.py
 ```
 
-Affiche les métriques comparatives et sauvegarde les meilleurs modèles dans `models/`.
+Affiche les métriques comparatives (moyennes sur 5 folds) et sauvegarde les meilleurs modèles dans `models/`.
 
 ### Étape 3 — Lancement de l'application
 
@@ -179,7 +183,7 @@ L'application s'ouvre automatiquement dans le navigateur à l'adresse `http://lo
 | scikit-image | Calcul de la matrice GLCM |
 | mahotas | Descripteurs Haralick |
 | bitdesc | Descripteurs BiT (Bio-inspired Taxonomy) |
-| scikit-learn | Modèles de classification et métriques |
+| scikit-learn | Modèles de classification, Pipeline, validation croisée |
 | numpy / pandas | Manipulation des données |
 | joblib | Sauvegarde et chargement des modèles |
 | Streamlit | Interface web |
