@@ -3,7 +3,7 @@ warnings.filterwarnings("ignore")
 
 import os
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 
 from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
@@ -56,15 +56,16 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
     print(f'{len(liste_args)} images à traiter sur {nb_workers} cœurs...')
 
     donnees = {'glcm': [], 'haralick': [], 'bitdesc': [], 'concat': []}
+    chemins_valides = []
 
+    # executor.map préserve l'ordre des entrées — garantit la synchro chemins/signatures
     with ProcessPoolExecutor(max_workers=nb_workers) as executor:
-        futures = {executor.submit(traiter_image, args): args[0] for args in liste_args}
-        for future in as_completed(futures):
-            resultat = future.result()
+        for resultat in executor.map(traiter_image, liste_args):
             if len(resultat) == 3:
                 print(f'[ERREUR] {resultat[0]} : {resultat[2]}')
                 continue
             chemin, descripteurs = resultat
+            chemins_valides.append(chemin)
             for nom_desc in donnees:
                 donnees[nom_desc].append(descripteurs[nom_desc])
             print(f'[OK] {chemin}')
@@ -75,9 +76,9 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
         np.save(chemin_npy, tableau)
         print(f'Sauvegardé : {chemin_npy}  forme={tableau.shape}')
 
-    chemin_mapping = os.path.join(dossier_signatures, 'class_mapping.npy')
-    np.save(chemin_mapping, dict_classes)
-    print(f'Mapping des classes sauvegardé : {chemin_mapping}')
+    np.save(os.path.join(dossier_signatures, 'chemins.npy'), np.array(chemins_valides))
+    np.save(os.path.join(dossier_signatures, 'class_mapping.npy'), dict_classes)
+    print(f'Mapping des classes sauvegardé : {dossier_signatures}/class_mapping.npy')
 
 
 def main():

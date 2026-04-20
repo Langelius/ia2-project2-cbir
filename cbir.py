@@ -6,7 +6,6 @@ from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_R
 
 DOSSIER_SIGNATURES = 'signatures'
 DOSSIER_MODELES = 'models'
-DOSSIER_DATASET = 'dataset'
 
 FONCTIONS_DESCRIPTEURS = {
     'glcm':     glcm_RGB,
@@ -67,28 +66,19 @@ def charger_signatures(nom_descripteur):
     return _cache[key]
 
 
-def charger_chemins_images(dossier_dataset, dict_classes):
-    key = f'chemins_{dossier_dataset}'
-    if key not in _cache:
-        chemins = []
-        etiquettes = []
-        for racine, _, fichiers in os.walk(dossier_dataset):
-            for fichier in sorted(fichiers):
-                if not fichier.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
-                    continue
-                nom_classe = os.path.basename(racine)
-                if nom_classe not in dict_classes:
-                    continue
-                chemins.append(os.path.join(racine, fichier))
-                etiquettes.append(dict_classes[nom_classe])
-        _cache[key] = (chemins, np.array(etiquettes))
-    return _cache[key]
+def charger_chemins():
+    if 'chemins' not in _cache:
+        chemin = os.path.join(DOSSIER_SIGNATURES, 'chemins.npy')
+        _cache['chemins'] = np.load(chemin, allow_pickle=True).tolist()
+    return _cache['chemins']
 
 
 def charger_modele(nom_descripteur):
     key = f'modele_{nom_descripteur}'
     if key not in _cache:
         chemin = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
+        if not os.path.exists(chemin):
+            raise FileNotFoundError(f"Modèle introuvable pour le descripteur '{nom_descripteur}'. Lancez classification.py d'abord.")
         _cache[key] = joblib.load(chemin)
     return _cache[key]
 
@@ -128,34 +118,39 @@ def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
     image_rgb = charger_image(chemin_requete)
     caracteristiques_requete = np.array(fonction_descripteur(image_rgb))
 
-    # Prédiction de la classe
+    # Prédiction de la classe via le pipeline (scaler inclus)
     modele = charger_modele(nom_descripteur)
     indice_classe_predite = modele.predict([caracteristiques_requete])[0]
     classe_predite = index_vers_classe[indice_classe_predite]
 
-    # Chargement des signatures et filtrage par classe prédite
-    signatures, etiquettes_dataset = charger_signatures(nom_descripteur)
-    chemins_images, etiquettes_images = charger_chemins_images(DOSSIER_DATASET, dict_classes)
+    # Chargement des signatures et chemins (synchronisés par extraction.py)
+    signatures, etiquettes = charger_signatures(nom_descripteur)
+    chemins = charger_chemins()
 
-    # Version longue :
-    # signatures_classe = []
-    # for i, etiquette in enumerate(etiquettes_images):
-    #     if etiquette == indice_classe_predite:
-    #         signatures_classe.append(signatures[i])
-    # signatures_classe = np.array(signatures_classe)
-    masque_classe = etiquettes_images == indice_classe_predite # masque booléen pour filtrer les images de la classe prédite
+    # Filtrage par classe prédite
+    masque_classe = etiquettes == indice_classe_predite
     signatures_classe = signatures[masque_classe]
+    chemins_classe = [c for c, ok in zip(chemins, masque_classe) if ok]
 
-    chemins_classe = [chemin for chemin, appartient_classe in zip(chemins_images, masque_classe) if appartient_classe]
+    # Application du scaler du pipeline pour des distances cohérentes
+    steps = dict(modele.steps)
+    if 'scaler' in steps:
+        scaler = steps['scaler']
+        caracteristiques_requete_norm = scaler.transform([caracteristiques_requete])[0]
+        signatures_classe_norm = scaler.transform(signatures_classe)
+    else:
+        caracteristiques_requete_norm = caracteristiques_requete
+        signatures_classe_norm = signatures_classe
 
     # Calcul des distances (vectorisé sur toute la classe)
     fonction_distance = MESURES_DISTANCE[nom_distance]
-    distances = fonction_distance(caracteristiques_requete, signatures_classe)
+    distances = fonction_distance(caracteristiques_requete_norm, signatures_classe_norm)
 
     # Tri par distance croissante
+    nb_resultats = min(nb_resultats, len(chemins_classe))
     indices_tries = np.argsort(distances)
     resultats = [
-        (chemins_classe[i], distances[i])
+        (chemins_classe[i], float(distances[i]))
         for i in indices_tries[:nb_resultats]
     ]
 

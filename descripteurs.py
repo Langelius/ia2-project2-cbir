@@ -11,6 +11,8 @@ PROPRIETES_GLCM = ['contrast', 'homogeneity', 'energy', 'dissimilarity', 'correl
 def charger_image(chemin):
     """Charge une image depuis le disque et la convertit en RGB."""
     image = cv2.imread(chemin)
+    if image is None:
+        raise ValueError(f"Impossible de lire l'image : {chemin}")
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 
