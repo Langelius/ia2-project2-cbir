@@ -15,19 +15,19 @@ from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 from sklearn.pipeline import Pipeline
 
-DOSSIER_SIGNATURES = 'signatures'
-DOSSIER_MODELES = 'models'
-N_FOLDS = 5
+dossier_signatures = 'signatures'
+dossier_modeles = 'models'
+n_folds = 5
 
-DESCRIPTEURS_DISPO = ['glcm', 'haralick', 'bitdesc', 'concat']
+descripteurs_dispo = ['glcm', 'haralick', 'bitdesc', 'concat']
 
-MODELES = [
+modeles = [
     ('Decision Tree', DTC(random_state=42)),
     ('Random Forest', RFC(random_state=42)),
     ('SVM',           SVC(random_state=42)),
 ]
 
-SCALERS = [
+scalers = [
     ('Aucune',     None),
     ('Standard',   StandardScaler()),
     ('MinMax',     MinMaxScaler()),
@@ -36,7 +36,7 @@ SCALERS = [
 
 
 def charger_signatures(nom_descripteur):
-    chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
+    chemin = os.path.join(dossier_signatures, f'signatures_{nom_descripteur}.npy')
     tableau = np.load(chemin)
     caracteristiques = tableau[:, :-1].astype('float')
     etiquettes = tableau[:, -1].astype('int')
@@ -54,7 +54,7 @@ def construire_pipeline(nom_scaler, scaler, nom_modele, modele):
 
 def evaluer_modeles(caracteristiques, etiquettes):
     resultats = []
-    cv = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
     scoring = {
         'accuracy':  'accuracy',
         'precision': 'precision_weighted',
@@ -62,8 +62,8 @@ def evaluer_modeles(caracteristiques, etiquettes):
         'f1':        'f1_weighted',
     }
 
-    for nom_scaler, scaler in SCALERS:
-        for nom_modele, modele in MODELES:
+    for nom_scaler, scaler in scalers:
+        for nom_modele, modele in modeles:
             _, pipeline = construire_pipeline(nom_scaler, scaler, nom_modele, modele)
 
             scores = cross_validate(pipeline, caracteristiques, etiquettes, cv=cv, scoring=scoring)
@@ -82,13 +82,13 @@ def evaluer_modeles(caracteristiques, etiquettes):
 
 def afficher_matrices_confusion(caracteristiques, etiquettes, df_resultats, dict_classes):
     noms_classes = [nom for nom, _ in sorted(dict_classes.items(), key=lambda x: x[1])]
-    cv = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
 
     for _, ligne in df_resultats.iterrows():
         nom_scaler = ligne['Normalisation']
         nom_modele = ligne['Modèle']
-        scaler = dict(SCALERS)[nom_scaler]
-        modele = dict(MODELES)[nom_modele]
+        scaler = dict(scalers)[nom_scaler]
+        modele = dict(modeles)[nom_modele]
         nom_pipeline, pipeline = construire_pipeline(nom_scaler, scaler, nom_modele, modele)
 
         matrice_totale = np.zeros((len(noms_classes), len(noms_classes)), dtype=int)
@@ -104,19 +104,19 @@ def afficher_matrices_confusion(caracteristiques, etiquettes, df_resultats, dict
 
 
 def sauvegarder_meilleur_modele(caracteristiques, etiquettes, df_resultats, nom_descripteur):
-    os.makedirs(DOSSIER_MODELES, exist_ok=True)
+    os.makedirs(dossier_modeles, exist_ok=True)
 
     idx_meilleur = df_resultats['Accuracy'].idxmax()
     meilleure_norm      = df_resultats.loc[idx_meilleur, 'Normalisation']
     meilleur_modele_nom = df_resultats.loc[idx_meilleur, 'Modèle']
 
-    scaler = dict(SCALERS)[meilleure_norm]
-    modele = dict(MODELES)[meilleur_modele_nom]
+    scaler = dict(scalers)[meilleure_norm]
+    modele = dict(modeles)[meilleur_modele_nom]
     nom_pipeline, pipeline = construire_pipeline(meilleure_norm, scaler, meilleur_modele_nom, modele)
 
     pipeline.fit(caracteristiques, etiquettes)
 
-    chemin_modele = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
+    chemin_modele = os.path.join(dossier_modeles, f'meilleur_modele_{nom_descripteur}.joblib')
     joblib.dump(pipeline, chemin_modele)
     print(f'\nMeilleur pipeline : {nom_pipeline} (sauvegardé dans {chemin_modele})')
     return nom_pipeline, chemin_modele
@@ -133,7 +133,7 @@ def entrainer(nom_descripteur):
     print(df_resultats.set_index(['Normalisation', 'Modèle']).to_string())
 
     dict_classes = np.load(
-        os.path.join(DOSSIER_SIGNATURES, 'class_mapping.npy'), allow_pickle=True
+        os.path.join(dossier_signatures, 'class_mapping.npy'), allow_pickle=True
     ).item()
     afficher_matrices_confusion(caracteristiques, etiquettes, df_resultats, dict_classes)
 
@@ -144,8 +144,8 @@ def entrainer(nom_descripteur):
 def main():
     tous_resultats = []
 
-    for nom_desc in DESCRIPTEURS_DISPO:
-        chemin_sig = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_desc}.npy')
+    for nom_desc in descripteurs_dispo:
+        chemin_sig = os.path.join(dossier_signatures, f'signatures_{nom_desc}.npy')
         if not os.path.exists(chemin_sig):
             print(f'[IGNORÉ] Signatures introuvables pour : {nom_desc}')
             continue

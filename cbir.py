@@ -4,10 +4,10 @@ import joblib
 
 from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
-DOSSIER_SIGNATURES = 'signatures'
-DOSSIER_MODELES = 'models'
+dossier_signatures = 'signatures'
+dossier_modeles = 'models'
 
-FONCTIONS_DESCRIPTEURS = {
+fonctions_descripteurs = {
     'glcm':     glcm_RGB,
     'haralick': haralick_feat_RGB,
     'bitdesc':  bitdesc_feat_RGB,
@@ -34,7 +34,7 @@ def distance_cosinus(requete, signatures):
     return 1.0 - similarites
 
 
-MESURES_DISTANCE = {
+mesures_distance = {
     'euclidienne': distance_euclidienne,
     'canberra':    distance_canberra,
     'cosinus':     distance_cosinus,
@@ -47,7 +47,7 @@ _cache = {}
 def charger_signatures(nom_descripteur):
     key = f'signatures_{nom_descripteur}'
     if key not in _cache:
-        chemin = os.path.join(DOSSIER_SIGNATURES, f'signatures_{nom_descripteur}.npy')
+        chemin = os.path.join(dossier_signatures, f'signatures_{nom_descripteur}.npy')
         tableau = np.load(chemin)
         caracteristiques = tableau[:, :-1].astype('float')
         etiquettes = tableau[:, -1].astype('int')
@@ -57,7 +57,7 @@ def charger_signatures(nom_descripteur):
 
 def charger_chemins():
     if 'chemins' not in _cache:
-        chemin = os.path.join(DOSSIER_SIGNATURES, 'chemins.npy')
+        chemin = os.path.join(dossier_signatures, 'chemins.npy')
         _cache['chemins'] = np.load(chemin, allow_pickle=True).tolist()
     return _cache['chemins']
 
@@ -65,7 +65,7 @@ def charger_chemins():
 def charger_modele(nom_descripteur):
     key = f'modele_{nom_descripteur}'
     if key not in _cache:
-        chemin = os.path.join(DOSSIER_MODELES, f'meilleur_modele_{nom_descripteur}.joblib')
+        chemin = os.path.join(dossier_modeles, f'meilleur_modele_{nom_descripteur}.joblib')
         if not os.path.exists(chemin):
             raise FileNotFoundError(f"Modèle introuvable pour le descripteur '{nom_descripteur}'. Lancez classification.py d'abord.")
         _cache[key] = joblib.load(chemin)
@@ -74,7 +74,7 @@ def charger_modele(nom_descripteur):
 
 def charger_dict_classes():
     if 'dict_classes' not in _cache:
-        chemin = os.path.join(DOSSIER_SIGNATURES, 'class_mapping.npy')
+        chemin = os.path.join(dossier_signatures, 'class_mapping.npy')
         _cache['dict_classes'] = np.load(chemin, allow_pickle=True).item()
     return _cache['dict_classes']
 
@@ -83,7 +83,7 @@ def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
     dict_classes = charger_dict_classes()
     index_vers_classe = {indice: nom for nom, indice in dict_classes.items()}
 
-    fonction_descripteur = FONCTIONS_DESCRIPTEURS[nom_descripteur]
+    fonction_descripteur = fonctions_descripteurs[nom_descripteur]
     image_rgb = charger_image(chemin_requete)
     caracteristiques_requete = np.array(fonction_descripteur(image_rgb))
 
@@ -107,7 +107,7 @@ def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
         caracteristiques_requete_norm = caracteristiques_requete
         signatures_classe_norm = signatures_classe
 
-    fonction_distance = MESURES_DISTANCE[nom_distance]
+    fonction_distance = mesures_distance[nom_distance]
     distances = fonction_distance(caracteristiques_requete_norm, signatures_classe_norm)
 
     nb_resultats = min(nb_resultats, len(chemins_classe))

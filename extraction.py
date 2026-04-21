@@ -7,8 +7,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 from descripteurs import glcm_RGB, haralick_feat_RGB, bitdesc_feat_RGB, concat_RGB, charger_image
 
-DOSSIER_DATASET = 'dataset'
-DOSSIER_SIGNATURES = 'signatures'
+dossier_dataset = 'dataset'
+dossier_signatures = 'signatures'
 
 
 def construire_dict_classes(dossier_dataset):
@@ -81,9 +81,9 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
 
 
 def main():
-    dict_classes = construire_dict_classes(DOSSIER_DATASET)
+    dict_classes = construire_dict_classes(dossier_dataset)
     print(f'{len(dict_classes)} classes détectées : {list(dict_classes.keys())}')
-    extraction(DOSSIER_DATASET, DOSSIER_SIGNATURES, dict_classes)
+    extraction(dossier_dataset, dossier_signatures, dict_classes)
 
 
 if __name__ == '__main__':

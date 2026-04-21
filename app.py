@@ -4,7 +4,7 @@ import tempfile
 import streamlit as st
 from PIL import Image
 
-from cbir import rechercher, MESURES_DISTANCE, FONCTIONS_DESCRIPTEURS
+from cbir import rechercher, mesures_distance, fonctions_descripteurs
 
 
 st.set_page_config(
@@ -21,13 +21,13 @@ st.sidebar.header('Paramètres de recherche')
 
 descripteur_choisi = st.sidebar.selectbox(
     'Descripteur',
-    options=list(FONCTIONS_DESCRIPTEURS.keys()),
+    options=list(fonctions_descripteurs.keys()),
     format_func=lambda nom: nom.upper()
 )
 
 distance_choisie = st.sidebar.selectbox(
     'Mesure de distance',
-    options=list(MESURES_DISTANCE.keys()),
+    options=list(mesures_distance.keys()),
     format_func=lambda nom: nom.capitalize()
 )
 
