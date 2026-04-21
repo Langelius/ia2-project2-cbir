@@ -41,42 +41,42 @@ mesures_distance = {
 }
 
 
-_cache = {}
+stockage = {}
 
 
 def charger_signatures(nom_descripteur):
     key = f'signatures_{nom_descripteur}'
-    if key not in _cache:
+    if key not in stockage:
         chemin = os.path.join(dossier_signatures, f'signatures_{nom_descripteur}.npy')
         tableau = np.load(chemin)
         caracteristiques = tableau[:, :-1].astype('float')
         etiquettes = tableau[:, -1].astype('int')
-        _cache[key] = (caracteristiques, etiquettes)
-    return _cache[key]
+        stockage[key] = (caracteristiques, etiquettes)
+    return stockage[key]
 
 
 def charger_chemins():
-    if 'chemins' not in _cache:
+    if 'chemins' not in stockage:
         chemin = os.path.join(dossier_signatures, 'chemins.npy')
-        _cache['chemins'] = np.load(chemin, allow_pickle=True).tolist()
-    return _cache['chemins']
+        stockage['chemins'] = np.load(chemin, allow_pickle=True).tolist()
+    return stockage['chemins']
 
 
 def charger_modele(nom_descripteur):
     key = f'modele_{nom_descripteur}'
-    if key not in _cache:
+    if key not in stockage:
         chemin = os.path.join(dossier_modeles, f'meilleur_modele_{nom_descripteur}.joblib')
         if not os.path.exists(chemin):
             raise FileNotFoundError(f"Modèle introuvable pour le descripteur '{nom_descripteur}'. Lancez classification.py d'abord.")
-        _cache[key] = joblib.load(chemin)
-    return _cache[key]
+        stockage[key] = joblib.load(chemin)
+    return stockage[key]
 
 
 def charger_dict_classes():
-    if 'dict_classes' not in _cache:
+    if 'dict_classes' not in stockage:
         chemin = os.path.join(dossier_signatures, 'class_mapping.npy')
-        _cache['dict_classes'] = np.load(chemin, allow_pickle=True).item()
-    return _cache['dict_classes']
+        stockage['dict_classes'] = np.load(chemin, allow_pickle=True).item()
+    return stockage['dict_classes']
 
 
 def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
