@@ -15,17 +15,11 @@ FONCTIONS_DESCRIPTEURS = {
 }
 
 
-# ─────────────────────────────────────────────
-#  Mesures de distance
-# ─────────────────────────────────────────────
-
 def distance_euclidienne(requete, signatures):
-    """requete: (d,)  signatures: (n, d)  →  (n,)"""
     return np.sqrt(np.sum((signatures - requete) ** 2, axis=1))
 
 
 def distance_canberra(requete, signatures):
-    """requete: (d,)  signatures: (n, d)  →  (n,)"""
     numerateur = np.abs(signatures - requete)
     denominateur = np.abs(signatures) + np.abs(requete)
     with np.errstate(invalid='ignore', divide='ignore'):
@@ -34,7 +28,6 @@ def distance_canberra(requete, signatures):
 
 
 def distance_cosinus(requete, signatures):
-    """requete: (d,)  signatures: (n, d)  →  (n,)"""
     normes = np.linalg.norm(signatures, axis=1) * np.linalg.norm(requete)
     with np.errstate(invalid='ignore', divide='ignore'):
         similarites = np.where(normes != 0, signatures @ requete / normes, 0.0)
@@ -47,10 +40,6 @@ MESURES_DISTANCE = {
     'cosinus':     distance_cosinus,
 }
 
-
-# ─────────────────────────────────────────────
-#  Chargement des ressources
-# ─────────────────────────────────────────────
 
 _cache = {}
 
@@ -90,49 +79,25 @@ def charger_dict_classes():
     return _cache['dict_classes']
 
 
-# ─────────────────────────────────────────────
-#  Moteur CBIR
-# ─────────────────────────────────────────────
-
 def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
-    """
-    Recherche les images les plus similaires à l'image requête.
-
-    Paramètres
-    ----------
-    chemin_requete   : chemin vers l'image à rechercher
-    nom_descripteur  : 'glcm', 'haralick', 'bitdesc' ou 'concat'
-    nom_distance     : 'euclidienne', 'canberra' ou 'cosinus'
-    nb_resultats     : nombre d'images similaires à retourner
-
-    Retourne
-    --------
-    classe_predite   : nom de la classe prédite pour l'image requête
-    resultats        : liste de (chemin_image, distance) triée par distance croissante
-    """
     dict_classes = charger_dict_classes()
     index_vers_classe = {indice: nom for nom, indice in dict_classes.items()}
 
-    # Extraction des caractéristiques de l'image requête
     fonction_descripteur = FONCTIONS_DESCRIPTEURS[nom_descripteur]
     image_rgb = charger_image(chemin_requete)
     caracteristiques_requete = np.array(fonction_descripteur(image_rgb))
 
-    # Prédiction de la classe via le pipeline (scaler inclus)
     modele = charger_modele(nom_descripteur)
     indice_classe_predite = modele.predict([caracteristiques_requete])[0]
     classe_predite = index_vers_classe[indice_classe_predite]
 
-    # Chargement des signatures et chemins (synchronisés par extraction.py)
     signatures, etiquettes = charger_signatures(nom_descripteur)
     chemins = charger_chemins()
 
-    # Filtrage par classe prédite
     masque_classe = etiquettes == indice_classe_predite
     signatures_classe = signatures[masque_classe]
     chemins_classe = [c for c, ok in zip(chemins, masque_classe) if ok]
 
-    # Application du scaler du pipeline pour des distances cohérentes
     steps = dict(modele.steps)
     if 'scaler' in steps:
         scaler = steps['scaler']
@@ -142,11 +107,9 @@ def rechercher(chemin_requete, nom_descripteur, nom_distance, nb_resultats=10):
         caracteristiques_requete_norm = caracteristiques_requete
         signatures_classe_norm = signatures_classe
 
-    # Calcul des distances (vectorisé sur toute la classe)
     fonction_distance = MESURES_DISTANCE[nom_distance]
     distances = fonction_distance(caracteristiques_requete_norm, signatures_classe_norm)
 
-    # Tri par distance croissante
     nb_resultats = min(nb_resultats, len(chemins_classe))
     indices_tries = np.argsort(distances)
     resultats = [

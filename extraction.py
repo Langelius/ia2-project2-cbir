@@ -58,7 +58,6 @@ def extraction(dossier_dataset, dossier_signatures, dict_classes):
     donnees = {'glcm': [], 'haralick': [], 'bitdesc': [], 'concat': []}
     chemins_valides = []
 
-    # executor.map préserve l'ordre des entrées — garantit la synchro chemins/signatures
     with ProcessPoolExecutor(max_workers=nb_workers) as executor:
         for resultat in executor.map(traiter_image, liste_args):
             if len(resultat) == 3:

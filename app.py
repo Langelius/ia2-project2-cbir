@@ -52,7 +52,6 @@ if fichier_televerse is not None:
         st.subheader('Image requête')
         st.image(image_requete, use_container_width=True)
 
-    # Sauvegarde temporaire pour traitement, car les fonctions de recherche et les descripteurs attendent un chemin de fichier
     with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as fichier_temp:
         image_requete.save(fichier_temp.name)
         chemin_temp = fichier_temp.name
@@ -82,17 +81,12 @@ if fichier_televerse is not None:
 
     os.unlink(chemin_temp)
 
-    # ─────────────────────────────────────────────
-    #  Affichage des résultats
-    # ─────────────────────────────────────────────
-
     st.subheader(f'Images similaires — classe « {classe_predite} »')
 
     nb_colonnes = min(5, nb_resultats)
     colonnes = st.columns(nb_colonnes)
 
     for rang, (chemin_image, distance) in enumerate(resultats):
-        # Affichage dans la colonne correspondante de façon à ce que les résultats soient organisés en lignes de nb_colonnes images (grille responsive)
         with colonnes[rang % nb_colonnes]:
             image_resultat = Image.open(chemin_image)
             st.image(image_resultat, width='stretch')
